@@ -8,6 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+type ItemTable Table
+
 // an item that will be voted on
 type Item struct {
 	ID          string `json:"id"`
@@ -15,7 +17,7 @@ type Item struct {
 	Description string `json:"description"`
 }
 
-func createItemTable(client *dynamodb.Client) (Table, error) {
+func CreateItemTable(client *dynamodb.Client) (ItemTable, error) {
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{
 			{
@@ -33,12 +35,12 @@ func createItemTable(client *dynamodb.Client) (Table, error) {
 	}
 	_, err := client.CreateTable(context.TODO(), input)
 	if err != nil {
-		return Table{}, err
+		return ItemTable{}, err
 	}
-	return Table{Name: "Items", Client: client}, nil
+	return ItemTable{Name: "Items", Client: client}, nil
 }
 
-func (t Table) PutItem(item Item) error {
+func (t ItemTable) PutItem(item Item) error {
 	input := &dynamodb.PutItemInput{
 		Item: map[string]types.AttributeValue{
 			"ID":          &types.AttributeValueMemberS{Value: item.ID},
@@ -51,14 +53,14 @@ func (t Table) PutItem(item Item) error {
 	return err
 }
 
-func (t Table) GetItem(id string) (Item, error) {
+func (t ItemTable) GetItem(id string) (Item, error) {
 	input := &dynamodb.GetItemInput{
 		Key: map[string]types.AttributeValue{
 			"ID": &types.AttributeValueMemberS{Value: id},
 		},
 		TableName: aws.String(t.Name),
 	}
-	output, err := t.Client.GetItem(context.Background(), input)
+	output, err := t.Client.GetItem(context.TODO(), input)
 	if err != nil {
 		return Item{}, err
 	}
@@ -67,4 +69,23 @@ func (t Table) GetItem(id string) (Item, error) {
 		Name:        output.Item["Name"].(*types.AttributeValueMemberS).Value,
 		Description: output.Item["Description"].(*types.AttributeValueMemberS).Value,
 	}, nil
+}
+
+func (t ItemTable) AllItems() ([]Item, error) {
+	input := &dynamodb.ScanInput{
+		TableName: aws.String(t.Name),
+	}
+	output, err := t.Client.Scan(context.TODO(), input)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]Item, len(output.Items))
+	for i, item := range output.Items {
+		items[i] = Item{
+			ID:          item["ID"].(*types.AttributeValueMemberS).Value,
+			Name:        item["Name"].(*types.AttributeValueMemberS).Value,
+			Description: item["Description"].(*types.AttributeValueMemberS).Value,
+		}
+	}
+	return items, nil
 }

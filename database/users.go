@@ -8,13 +8,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+type UserTable Table
+
 // a user
 type User struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
-func createUserTable(client *dynamodb.Client) (Table, error) {
+func CreateUserTable(client *dynamodb.Client) (UserTable, error) {
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{
 			{
@@ -32,7 +34,7 @@ func createUserTable(client *dynamodb.Client) (Table, error) {
 	}
 	_, err := client.CreateTable(context.TODO(), input)
 	if err != nil {
-		return Table{}, err
+		return UserTable{}, err
 	}
-	return Table{Name: "Users", Client: client}, nil
+	return UserTable{Name: "Users", Client: client}, nil
 }

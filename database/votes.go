@@ -2,19 +2,23 @@ package database
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+type UserScoreTable Table
+
 // a vote on an item
 type UserScore struct {
 	ItemID string `json:"item_id"`
 	UserID string `json:"user_id"`
+	Rating int    `json:"rating"`
 }
 
-func createUserScoreTable(client *dynamodb.Client) (Table, error) {
+func CreateUserScoreTable(client *dynamodb.Client) (UserScoreTable, error) {
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{
 			{
@@ -40,16 +44,17 @@ func createUserScoreTable(client *dynamodb.Client) (Table, error) {
 	}
 	_, err := client.CreateTable(context.TODO(), input)
 	if err != nil {
-		return Table{}, err
+		return UserScoreTable{}, err
 	}
-	return Table{Name: "UserScores", Client: client}, nil
+	return UserScoreTable{Name: "UserScores", Client: client}, nil
 }
 
-func (t Table) PutUserScore(u UserScore) error {
+func (t UserScoreTable) PutUserScore(u UserScore) error {
 	input := &dynamodb.PutItemInput{
 		Item: map[string]types.AttributeValue{
 			"ItemID": &types.AttributeValueMemberS{Value: u.ItemID},
 			"UserID": &types.AttributeValueMemberS{Value: u.UserID},
+			"Rating": &types.AttributeValueMemberN{Value: strconv.Itoa(u.Rating)},
 		},
 		TableName: aws.String(t.Name),
 	}
@@ -57,7 +62,7 @@ func (t Table) PutUserScore(u UserScore) error {
 	return err
 }
 
-func (t Table) GetVote(itemID, userID string) (UserScore, error) {
+func (t UserScoreTable) GetUserScore(itemID, userID string) (UserScore, error) {
 	input := &dynamodb.GetItemInput{
 		Key: map[string]types.AttributeValue{
 			"ItemID": &types.AttributeValueMemberS{Value: itemID},
@@ -65,12 +70,41 @@ func (t Table) GetVote(itemID, userID string) (UserScore, error) {
 		},
 		TableName: aws.String(t.Name),
 	}
-	output, err := t.Client.GetItem(context.Background(), input)
+	output, err := t.Client.GetItem(context.TODO(), input)
 	if err != nil {
 		return UserScore{}, err
 	}
+	rating, err := strconv.Atoi(output.Item["Rating"].(*types.AttributeValueMemberN).Value)
 	return UserScore{
 		ItemID: output.Item["ItemID"].(*types.AttributeValueMemberS).Value,
 		UserID: output.Item["UserID"].(*types.AttributeValueMemberS).Value,
-	}, nil
+		Rating: rating,
+	}, err
+}
+
+func (t UserScoreTable) GetUserRatings(userID string) ([]UserScore, error) {
+	input := &dynamodb.QueryInput{
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":userID": &types.AttributeValueMemberS{Value: userID},
+		},
+		KeyConditionExpression: aws.String("UserID = :userID"),
+		TableName:              aws.String(t.Name),
+	}
+	output, err := t.Client.Query(context.TODO(), input)
+	if err != nil {
+		return nil, err
+	}
+	var ratings []UserScore
+	for _, item := range output.Items {
+		rating, err := strconv.Atoi(item["Rating"].(*types.AttributeValueMemberN).Value)
+		if err != nil {
+			return nil, err
+		}
+		ratings = append(ratings, UserScore{
+			ItemID: item["ItemID"].(*types.AttributeValueMemberS).Value,
+			UserID: item["UserID"].(*types.AttributeValueMemberS).Value,
+			Rating: rating,
+		})
+	}
+	return ratings, nil
 }
