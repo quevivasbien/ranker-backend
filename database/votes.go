@@ -40,7 +40,8 @@ func CreateUserScoreTable(client *dynamodb.Client) (UserScoreTable, error) {
 				KeyType:       types.KeyTypeRange,
 			},
 		},
-		TableName: aws.String("UserScores"),
+		TableName:   aws.String("UserScores"),
+		BillingMode: types.BillingModePayPerRequest,
 	}
 	_, err := client.CreateTable(context.TODO(), input)
 	if err != nil {

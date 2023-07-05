@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -31,7 +32,8 @@ func CreateItemTable(client *dynamodb.Client) (ItemTable, error) {
 				KeyType:       types.KeyTypeHash,
 			},
 		},
-		TableName: aws.String("Items"),
+		TableName:   aws.String("Items"),
+		BillingMode: types.BillingModePayPerRequest,
 	}
 	_, err := client.CreateTable(context.TODO(), input)
 	if err != nil {
@@ -64,11 +66,26 @@ func (t ItemTable) GetItem(id string) (Item, error) {
 	if err != nil {
 		return Item{}, err
 	}
+	if output.Item == nil {
+		// no item found
+		return Item{}, fmt.Errorf("no item found with id %s", id)
+	}
 	return Item{
 		ID:          output.Item["ID"].(*types.AttributeValueMemberS).Value,
 		Name:        output.Item["Name"].(*types.AttributeValueMemberS).Value,
 		Description: output.Item["Description"].(*types.AttributeValueMemberS).Value,
 	}, nil
+}
+
+func (t ItemTable) DeleteItem(id string) error {
+	input := &dynamodb.DeleteItemInput{
+		Key: map[string]types.AttributeValue{
+			"ID": &types.AttributeValueMemberS{Value: id},
+		},
+		TableName: aws.String(t.Name),
+	}
+	_, err := t.Client.DeleteItem(context.TODO(), input)
+	return err
 }
 
 func (t ItemTable) AllItems() ([]Item, error) {

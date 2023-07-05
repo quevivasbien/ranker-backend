@@ -30,7 +30,8 @@ func CreateUserTable(client *dynamodb.Client) (UserTable, error) {
 				KeyType:       types.KeyTypeHash,
 			},
 		},
-		TableName: aws.String("Users"),
+		TableName:   aws.String("Users"),
+		BillingMode: types.BillingModePayPerRequest,
 	}
 	_, err := client.CreateTable(context.TODO(), input)
 	if err != nil {
