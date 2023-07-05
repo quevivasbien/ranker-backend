@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -74,6 +75,9 @@ func (t UserScoreTable) GetUserScore(itemID, userID string) (UserScore, error) {
 	output, err := t.Client.GetItem(context.TODO(), input)
 	if err != nil {
 		return UserScore{}, err
+	}
+	if output.Item == nil {
+		return UserScore{}, fmt.Errorf("no user score found for item %s and user %s", itemID, userID)
 	}
 	rating, err := strconv.Atoi(output.Item["Rating"].(*types.AttributeValueMemberN).Value)
 	return UserScore{

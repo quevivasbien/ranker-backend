@@ -6,7 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"go-aws/database"
+	"github.com/quevivasbien/ranker-backend/database"
 )
 
 func handleItems(db database.Database) func(w http.ResponseWriter, r *http.Request) {

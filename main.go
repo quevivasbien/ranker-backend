@@ -1,8 +1,9 @@
 package main
 
 import (
-	"go-aws/server"
 	"net/http"
+
+	"github.com/quevivasbien/ranker-backend/server"
 )
 
 func main() {

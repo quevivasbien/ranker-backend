@@ -1,4 +1,4 @@
-module go-aws
+module github.com/quevivasbien/ranker-backend
 
 go 1.20
 

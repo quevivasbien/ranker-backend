@@ -67,7 +67,6 @@ func (t ItemTable) GetItem(id string) (Item, error) {
 		return Item{}, err
 	}
 	if output.Item == nil {
-		// no item found
 		return Item{}, fmt.Errorf("no item found with id %s", id)
 	}
 	return Item{
