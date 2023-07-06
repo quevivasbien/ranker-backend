@@ -24,21 +24,21 @@ func CreateUserScoreTable(client *dynamodb.Client) (UserScoreTable, error) {
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{
 			{
-				AttributeName: aws.String("ItemName"),
+				AttributeName: aws.String("UserName"),
 				AttributeType: types.ScalarAttributeTypeS,
 			},
 			{
-				AttributeName: aws.String("UserName"),
+				AttributeName: aws.String("ItemName"),
 				AttributeType: types.ScalarAttributeTypeS,
 			},
 		},
 		KeySchema: []types.KeySchemaElement{
 			{
-				AttributeName: aws.String("ItemName"),
+				AttributeName: aws.String("UserName"),
 				KeyType:       types.KeyTypeHash,
 			},
 			{
-				AttributeName: aws.String("UserName"),
+				AttributeName: aws.String("ItemName"),
 				KeyType:       types.KeyTypeRange,
 			},
 		},
@@ -77,7 +77,7 @@ func (t UserScoreTable) UpdateUserScore(u UserScore) error {
 			"UserName": &types.AttributeValueMemberS{Value: u.UserName},
 		},
 		TableName:        aws.String(t.Name),
-		UpdateExpression: aws.String("SET Rating = :rating AND NumVotes = :numVotes"),
+		UpdateExpression: aws.String("SET Rating = :rating, NumVotes = :numVotes"),
 	}
 	_, err := t.Client.UpdateItem(context.TODO(), input)
 	return err
@@ -96,7 +96,7 @@ func (t UserScoreTable) GetUserScore(itemName, userName string) (UserScore, erro
 		return UserScore{}, err
 	}
 	if output.Item == nil {
-		return UserScore{}, fmt.Errorf("no user score found for item %s and user %s", itemName, userName)
+		return UserScore{}, MakeNotFoundError(fmt.Sprintf("no user score found for item %s and user %s", itemName, userName))
 	}
 	rating, err := strconv.Atoi(output.Item["Rating"].(*types.AttributeValueMemberN).Value)
 	if err != nil {
@@ -150,7 +150,7 @@ type GlobalScoreTable Table
 
 type GlobalScore struct {
 	ItemName string `json:"item_name"`
-	Score    int    `json:"score"`
+	Rating   int    `json:"rating"`
 	NumVotes int    `json:"num_votes"`
 }
 
@@ -182,7 +182,7 @@ func (t GlobalScoreTable) PutGlobalScore(g GlobalScore) error {
 	input := &dynamodb.PutItemInput{
 		Item: map[string]types.AttributeValue{
 			"ItemName": &types.AttributeValueMemberS{Value: g.ItemName},
-			"Score":    &types.AttributeValueMemberN{Value: strconv.Itoa(g.Score)},
+			"Rating":   &types.AttributeValueMemberN{Value: strconv.Itoa(g.Rating)},
 			"NumVotes": &types.AttributeValueMemberN{Value: strconv.Itoa(g.NumVotes)},
 		},
 		TableName: aws.String(t.Name),
@@ -194,14 +194,14 @@ func (t GlobalScoreTable) PutGlobalScore(g GlobalScore) error {
 func (t GlobalScoreTable) UpdateGlobalScore(g GlobalScore) error {
 	input := &dynamodb.UpdateItemInput{
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":score":    &types.AttributeValueMemberN{Value: strconv.Itoa(g.Score)},
+			":rating":   &types.AttributeValueMemberN{Value: strconv.Itoa(g.Rating)},
 			":numVotes": &types.AttributeValueMemberN{Value: strconv.Itoa(g.NumVotes)},
 		},
 		Key: map[string]types.AttributeValue{
 			"ItemName": &types.AttributeValueMemberS{Value: g.ItemName},
 		},
 		TableName:        aws.String(t.Name),
-		UpdateExpression: aws.String("SET Score = :score AND NumVotes = :numVotes"),
+		UpdateExpression: aws.String("set Rating = :rating, NumVotes = :numVotes"),
 	}
 	_, err := t.Client.UpdateItem(context.TODO(), input)
 	return err
@@ -219,9 +219,9 @@ func (t GlobalScoreTable) GetGlobalScore(itemName string) (GlobalScore, error) {
 		return GlobalScore{}, err
 	}
 	if output.Item == nil {
-		return GlobalScore{}, fmt.Errorf("no global score found for item %s", itemName)
+		return GlobalScore{}, MakeNotFoundError(fmt.Sprintf("no global score found for item %s", itemName))
 	}
-	score, err := strconv.Atoi(output.Item["Score"].(*types.AttributeValueMemberN).Value)
+	rating, err := strconv.Atoi(output.Item["Rating"].(*types.AttributeValueMemberN).Value)
 	if err != nil {
 		return GlobalScore{}, err
 	}
@@ -231,7 +231,7 @@ func (t GlobalScoreTable) GetGlobalScore(itemName string) (GlobalScore, error) {
 	}
 	return GlobalScore{
 		ItemName: output.Item["ItemName"].(*types.AttributeValueMemberS).Value,
-		Score:    score,
+		Rating:   rating,
 		NumVotes: numVotes,
 	}, nil
 }

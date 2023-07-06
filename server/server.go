@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -62,7 +61,7 @@ func handleItems(db database.Database) func(w http.ResponseWriter, r *http.Reque
 func handleItem(db database.Database) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
-		name := vars["name"]
+		name := vars["item"]
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -191,6 +190,12 @@ func handleUser(db database.Database) func(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+type comparisonResponse struct {
+	Item1  string `json:"item1"`
+	Item2  string `json:"item2"`
+	Winner string `json:"winner"`
+}
+
 // create handler for /users/{name}/compare endpoint
 func handleCompare(db database.Database) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +208,7 @@ func handleCompare(db database.Database) func(w http.ResponseWriter, r *http.Req
 
 		// get items for comparison
 		if r.Method == "GET" {
-			item1, item2, err := getItemsForComparison(db, name)
+			item1, item2, err := GetItemsForComparison(db, name)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
@@ -217,12 +222,91 @@ func handleCompare(db database.Database) func(w http.ResponseWriter, r *http.Req
 			}
 			w.WriteHeader(http.StatusOK)
 			w.Write(bytes)
+			return
 		}
 
 		// send the result of a comparison
 		if r.Method == "POST" {
-			// TODO
-			fmt.Printf("POST request received at /users/%s/compare\n", name)
+			var response comparisonResponse
+			err := json.NewDecoder(r.Body).Decode(&response)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			err = ProcessUserChoice(db, name, response.Item1, response.Item2, response.Winner)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+			}
+			return
+		}
+
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// create handler for /items/{item}/score endpoint
+func handleGlobalScore(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		vars := mux.Vars(r)
+		itemName := vars["item"]
+
+		// get the score for a single item
+		if r.Method == "GET" {
+			globalScore, err := db.GlobalScores.GetGlobalScore(itemName)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			bytes, err := json.Marshal(globalScore)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(bytes)
+			return
+		}
+
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// create handler for /users/{name}/score/{item} endpoint
+func handleUserScore(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		vars := mux.Vars(r)
+		name := vars["name"]
+		itemName := vars["item"]
+
+		// get the score for a single item
+		if r.Method == "GET" {
+			userScore, err := db.UserScores.GetUserScore(itemName, name)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			bytes, err := json.Marshal(userScore)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(bytes)
+			return
 		}
 
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -241,12 +325,15 @@ func CreateRouter() (*mux.Router, error) {
 	}
 
 	r.HandleFunc("/items", handleItems(db)).Methods("GET", "POST")
-	r.HandleFunc("/items/{name}", handleItem(db)).Methods("GET", "DELETE")
+	r.HandleFunc("/items/{item}", handleItem(db)).Methods("GET", "DELETE")
 
 	r.HandleFunc("/users", handleUsers(db)).Methods("GET", "POST")
 	r.HandleFunc("/users/{name}", handleUser(db)).Methods("GET", "DELETE")
 
 	r.HandleFunc("/users/{name}/compare", handleCompare(db)).Methods("GET", "POST")
+
+	r.HandleFunc("/items/{item}/score", handleGlobalScore(db)).Methods("GET")
+	r.HandleFunc("/users/{name}/score/{item}", handleUserScore(db)).Methods("GET")
 
 	return r, nil
 }

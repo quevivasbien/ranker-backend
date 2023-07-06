@@ -91,3 +91,16 @@ func GetDatabase(client *dynamodb.Client) (Database, error) {
 		GlobalScores: globalScores,
 	}, nil
 }
+
+// error type for not found
+type NotFoundError struct {
+	Message string
+}
+
+func (e NotFoundError) Error() string {
+	return e.Message
+}
+
+func MakeNotFoundError(message string) error {
+	return NotFoundError{Message: message}
+}
