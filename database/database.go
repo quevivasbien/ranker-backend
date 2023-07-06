@@ -34,6 +34,14 @@ func ListTables(client *dynamodb.Client) ([]string, error) {
 	return response.TableNames, nil
 }
 
+func DeleteTable(client *dynamodb.Client, tableName string) error {
+	input := &dynamodb.DeleteTableInput{
+		TableName: &tableName,
+	}
+	_, err := client.DeleteTable(context.TODO(), input)
+	return err
+}
+
 func GetDatabase(client *dynamodb.Client) (Database, error) {
 	currentTables, err := ListTables(client)
 	if err != nil {

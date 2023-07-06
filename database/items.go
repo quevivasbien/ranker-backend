@@ -13,7 +13,6 @@ type ItemTable Table
 
 // an item that will be voted on
 type Item struct {
-	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 }
@@ -22,13 +21,13 @@ func CreateItemTable(client *dynamodb.Client) (ItemTable, error) {
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{
 			{
-				AttributeName: aws.String("ID"),
+				AttributeName: aws.String("Name"),
 				AttributeType: types.ScalarAttributeTypeS,
 			},
 		},
 		KeySchema: []types.KeySchemaElement{
 			{
-				AttributeName: aws.String("ID"),
+				AttributeName: aws.String("Name"),
 				KeyType:       types.KeyTypeHash,
 			},
 		},
@@ -45,7 +44,6 @@ func CreateItemTable(client *dynamodb.Client) (ItemTable, error) {
 func (t ItemTable) PutItem(item Item) error {
 	input := &dynamodb.PutItemInput{
 		Item: map[string]types.AttributeValue{
-			"ID":          &types.AttributeValueMemberS{Value: item.ID},
 			"Name":        &types.AttributeValueMemberS{Value: item.Name},
 			"Description": &types.AttributeValueMemberS{Value: item.Description},
 		},
@@ -55,10 +53,10 @@ func (t ItemTable) PutItem(item Item) error {
 	return err
 }
 
-func (t ItemTable) GetItem(id string) (Item, error) {
+func (t ItemTable) GetItem(name string) (Item, error) {
 	input := &dynamodb.GetItemInput{
 		Key: map[string]types.AttributeValue{
-			"ID": &types.AttributeValueMemberS{Value: id},
+			"Name": &types.AttributeValueMemberS{Value: name},
 		},
 		TableName: aws.String(t.Name),
 	}
@@ -67,19 +65,18 @@ func (t ItemTable) GetItem(id string) (Item, error) {
 		return Item{}, err
 	}
 	if output.Item == nil {
-		return Item{}, fmt.Errorf("no item found with id %s", id)
+		return Item{}, fmt.Errorf("no item found with name %s", name)
 	}
 	return Item{
-		ID:          output.Item["ID"].(*types.AttributeValueMemberS).Value,
 		Name:        output.Item["Name"].(*types.AttributeValueMemberS).Value,
 		Description: output.Item["Description"].(*types.AttributeValueMemberS).Value,
 	}, nil
 }
 
-func (t ItemTable) DeleteItem(id string) error {
+func (t ItemTable) DeleteItem(name string) error {
 	input := &dynamodb.DeleteItemInput{
 		Key: map[string]types.AttributeValue{
-			"ID": &types.AttributeValueMemberS{Value: id},
+			"Name": &types.AttributeValueMemberS{Value: name},
 		},
 		TableName: aws.String(t.Name),
 	}
@@ -98,7 +95,6 @@ func (t ItemTable) AllItems() ([]Item, error) {
 	items := make([]Item, len(output.Items))
 	for i, item := range output.Items {
 		items[i] = Item{
-			ID:          item["ID"].(*types.AttributeValueMemberS).Value,
 			Name:        item["Name"].(*types.AttributeValueMemberS).Value,
 			Description: item["Description"].(*types.AttributeValueMemberS).Value,
 		}
