@@ -13,9 +13,10 @@ type Table struct {
 }
 
 type Database struct {
-	Items      ItemTable
-	Users      UserTable
-	UserScores UserScoreTable
+	Items        ItemTable
+	Users        UserTable
+	UserScores   UserScoreTable
+	GlobalScores GlobalScoreTable
 }
 
 func GetClient(region string) (*dynamodb.Client, error) {
@@ -74,9 +75,19 @@ func GetDatabase(client *dynamodb.Client) (Database, error) {
 	} else {
 		userScores = UserScoreTable{Name: "UserScores", Client: client}
 	}
+	var globalScores GlobalScoreTable
+	if !contains(currentTables, "GlobalScores") {
+		globalScores, err = CreateGlobalScoreTable(client)
+		if err != nil {
+			return Database{}, err
+		}
+	} else {
+		globalScores = GlobalScoreTable{Name: "GlobalScores", Client: client}
+	}
 	return Database{
-		Items:      items,
-		Users:      users,
-		UserScores: userScores,
+		Items:        items,
+		Users:        users,
+		UserScores:   userScores,
+		GlobalScores: globalScores,
 	}, nil
 }

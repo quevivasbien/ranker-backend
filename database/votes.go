@@ -17,6 +17,7 @@ type UserScore struct {
 	ItemName string `json:"item_name"`
 	UserName string `json:"user_name"`
 	Rating   int    `json:"rating"`
+	NumVotes int    `json:"num_votes"`
 }
 
 func CreateUserScoreTable(client *dynamodb.Client) (UserScoreTable, error) {
@@ -57,6 +58,7 @@ func (t UserScoreTable) PutUserScore(u UserScore) error {
 			"ItemName": &types.AttributeValueMemberS{Value: u.ItemName},
 			"UserName": &types.AttributeValueMemberS{Value: u.UserName},
 			"Rating":   &types.AttributeValueMemberN{Value: strconv.Itoa(u.Rating)},
+			"NumVotes": &types.AttributeValueMemberN{Value: strconv.Itoa(u.NumVotes)},
 		},
 		TableName: aws.String(t.Name),
 	}
@@ -67,14 +69,15 @@ func (t UserScoreTable) PutUserScore(u UserScore) error {
 func (t UserScoreTable) UpdateUserScore(u UserScore) error {
 	input := &dynamodb.UpdateItemInput{
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":rating": &types.AttributeValueMemberN{Value: strconv.Itoa(u.Rating)},
+			":rating":   &types.AttributeValueMemberN{Value: strconv.Itoa(u.Rating)},
+			":numVotes": &types.AttributeValueMemberN{Value: strconv.Itoa(u.NumVotes)},
 		},
 		Key: map[string]types.AttributeValue{
 			"ItemName": &types.AttributeValueMemberS{Value: u.ItemName},
 			"UserName": &types.AttributeValueMemberS{Value: u.UserName},
 		},
 		TableName:        aws.String(t.Name),
-		UpdateExpression: aws.String("SET Rating = :rating"),
+		UpdateExpression: aws.String("SET Rating = :rating AND NumVotes = :numVotes"),
 	}
 	_, err := t.Client.UpdateItem(context.TODO(), input)
 	return err
@@ -96,14 +99,22 @@ func (t UserScoreTable) GetUserScore(itemName, userName string) (UserScore, erro
 		return UserScore{}, fmt.Errorf("no user score found for item %s and user %s", itemName, userName)
 	}
 	rating, err := strconv.Atoi(output.Item["Rating"].(*types.AttributeValueMemberN).Value)
+	if err != nil {
+		return UserScore{}, err
+	}
+	numVotes, err := strconv.Atoi(output.Item["NumVotes"].(*types.AttributeValueMemberN).Value)
+	if err != nil {
+		return UserScore{}, err
+	}
 	return UserScore{
 		ItemName: output.Item["ItemName"].(*types.AttributeValueMemberS).Value,
 		UserName: output.Item["UserName"].(*types.AttributeValueMemberS).Value,
 		Rating:   rating,
-	}, err
+		NumVotes: numVotes,
+	}, nil
 }
 
-func (t UserScoreTable) GetUserRatings(userName string) ([]UserScore, error) {
+func (t UserScoreTable) GetUserScores(userName string) ([]UserScore, error) {
 	input := &dynamodb.QueryInput{
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":userName": &types.AttributeValueMemberS{Value: userName},
@@ -121,10 +132,15 @@ func (t UserScoreTable) GetUserRatings(userName string) ([]UserScore, error) {
 		if err != nil {
 			return nil, err
 		}
+		numVotes, err := strconv.Atoi(item["NumVotes"].(*types.AttributeValueMemberN).Value)
+		if err != nil {
+			return nil, err
+		}
 		ratings = append(ratings, UserScore{
 			ItemName: item["ItemName"].(*types.AttributeValueMemberS).Value,
 			UserName: item["UserName"].(*types.AttributeValueMemberS).Value,
 			Rating:   rating,
+			NumVotes: numVotes,
 		})
 	}
 	return ratings, nil
@@ -135,9 +151,10 @@ type GlobalScoreTable Table
 type GlobalScore struct {
 	ItemName string `json:"item_name"`
 	Score    int    `json:"score"`
+	NumVotes int    `json:"num_votes"`
 }
 
-func CreateGlobalScoreTable(client *dynamodb.Client) (Table, error) {
+func CreateGlobalScoreTable(client *dynamodb.Client) (GlobalScoreTable, error) {
 	input := &dynamodb.CreateTableInput{
 		AttributeDefinitions: []types.AttributeDefinition{
 			{
@@ -156,9 +173,9 @@ func CreateGlobalScoreTable(client *dynamodb.Client) (Table, error) {
 	}
 	_, err := client.CreateTable(context.TODO(), input)
 	if err != nil {
-		return Table{}, err
+		return GlobalScoreTable{}, err
 	}
-	return Table{Name: "GlobalScores", Client: client}, nil
+	return GlobalScoreTable{Name: "GlobalScores", Client: client}, nil
 }
 
 func (t GlobalScoreTable) PutGlobalScore(g GlobalScore) error {
@@ -166,6 +183,7 @@ func (t GlobalScoreTable) PutGlobalScore(g GlobalScore) error {
 		Item: map[string]types.AttributeValue{
 			"ItemName": &types.AttributeValueMemberS{Value: g.ItemName},
 			"Score":    &types.AttributeValueMemberN{Value: strconv.Itoa(g.Score)},
+			"NumVotes": &types.AttributeValueMemberN{Value: strconv.Itoa(g.NumVotes)},
 		},
 		TableName: aws.String(t.Name),
 	}
@@ -176,13 +194,14 @@ func (t GlobalScoreTable) PutGlobalScore(g GlobalScore) error {
 func (t GlobalScoreTable) UpdateGlobalScore(g GlobalScore) error {
 	input := &dynamodb.UpdateItemInput{
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":score": &types.AttributeValueMemberN{Value: strconv.Itoa(g.Score)},
+			":score":    &types.AttributeValueMemberN{Value: strconv.Itoa(g.Score)},
+			":numVotes": &types.AttributeValueMemberN{Value: strconv.Itoa(g.NumVotes)},
 		},
 		Key: map[string]types.AttributeValue{
 			"ItemName": &types.AttributeValueMemberS{Value: g.ItemName},
 		},
 		TableName:        aws.String(t.Name),
-		UpdateExpression: aws.String("SET Score = :score"),
+		UpdateExpression: aws.String("SET Score = :score AND NumVotes = :numVotes"),
 	}
 	_, err := t.Client.UpdateItem(context.TODO(), input)
 	return err
@@ -203,8 +222,16 @@ func (t GlobalScoreTable) GetGlobalScore(itemName string) (GlobalScore, error) {
 		return GlobalScore{}, fmt.Errorf("no global score found for item %s", itemName)
 	}
 	score, err := strconv.Atoi(output.Item["Score"].(*types.AttributeValueMemberN).Value)
+	if err != nil {
+		return GlobalScore{}, err
+	}
+	numVotes, err := strconv.Atoi(output.Item["NumVotes"].(*types.AttributeValueMemberN).Value)
+	if err != nil {
+		return GlobalScore{}, err
+	}
 	return GlobalScore{
 		ItemName: output.Item["ItemName"].(*types.AttributeValueMemberS).Value,
 		Score:    score,
-	}, err
+		NumVotes: numVotes,
+	}, nil
 }

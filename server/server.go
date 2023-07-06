@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -190,6 +191,44 @@ func handleUser(db database.Database) func(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// create handler for /users/{name}/compare endpoint
+func handleCompare(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		vars := mux.Vars(r)
+		name := vars["name"]
+
+		// get items for comparison
+		if r.Method == "GET" {
+			item1, item2, err := getItemsForComparison(db, name)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			bytes, err := json.Marshal([]string{item1, item2})
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(bytes)
+		}
+
+		// send the result of a comparison
+		if r.Method == "POST" {
+			// TODO
+			fmt.Printf("POST request received at /users/%s/compare\n", name)
+		}
+
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
 func CreateRouter() (*mux.Router, error) {
 	r := mux.NewRouter()
 	client, err := database.GetClient("us-east-1")
@@ -206,6 +245,8 @@ func CreateRouter() (*mux.Router, error) {
 
 	r.HandleFunc("/users", handleUsers(db)).Methods("GET", "POST")
 	r.HandleFunc("/users/{name}", handleUser(db)).Methods("GET", "DELETE")
+
+	r.HandleFunc("/users/{name}/compare", handleCompare(db)).Methods("GET", "POST")
 
 	return r, nil
 }
