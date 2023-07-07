@@ -5,23 +5,29 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/rs/cors"
 
 	"github.com/quevivasbien/ranker-backend/database"
 )
 
+// send the right HTTP status code for an error
+func setHTTPError(w http.ResponseWriter, err error) {
+	if _, ok := err.(database.NotFoundError); ok {
+		w.WriteHeader(http.StatusNotFound)
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	w.Write([]byte(err.Error()))
+}
+
 // create handler for /items endpoint
-func handleItems(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+func handleItems(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
 		// get list of all items
 		if r.Method == "GET" {
 			items, err := db.Items.AllItems()
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 
@@ -44,8 +50,7 @@ func handleItems(db database.Database) func(w http.ResponseWriter, r *http.Reque
 
 			err = db.Items.PutItem(item)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 
@@ -58,20 +63,16 @@ func handleItems(db database.Database) func(w http.ResponseWriter, r *http.Reque
 }
 
 // create handler for /items/{name} endpoint
-func handleItem(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+func handleItem(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		name := vars["item"]
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 
 		// get a single item
 		if r.Method == "GET" {
 			item, err := db.Items.GetItem(name)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 
@@ -86,8 +87,7 @@ func handleItem(db database.Database) func(w http.ResponseWriter, r *http.Reques
 		if r.Method == "DELETE" {
 			err := db.Items.DeleteItem(name)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 
@@ -100,18 +100,14 @@ func handleItem(db database.Database) func(w http.ResponseWriter, r *http.Reques
 }
 
 // create handler for /users endpoint
-func handleUsers(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+func handleUsers(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 
 		// get list of all users
 		if r.Method == "GET" {
 			users, err := db.Users.AllUsers()
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 
@@ -134,8 +130,7 @@ func handleUsers(db database.Database) func(w http.ResponseWriter, r *http.Reque
 
 			err = db.Users.PutUser(user)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 
@@ -148,12 +143,8 @@ func handleUsers(db database.Database) func(w http.ResponseWriter, r *http.Reque
 }
 
 // create handler for /users/{name} endpoint
-func handleUser(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+func handleUser(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
 		vars := mux.Vars(r)
 		name := vars["name"]
 
@@ -161,8 +152,7 @@ func handleUser(db database.Database) func(w http.ResponseWriter, r *http.Reques
 		if r.Method == "GET" {
 			user, err := db.Users.GetUser(name)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 
@@ -177,8 +167,7 @@ func handleUser(db database.Database) func(w http.ResponseWriter, r *http.Reques
 		if r.Method == "DELETE" {
 			err := db.Users.DeleteUser(name)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 
@@ -197,12 +186,8 @@ type comparisonResponse struct {
 }
 
 // create handler for /users/{name}/compare endpoint
-func handleCompare(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+func handleCompare(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
 		vars := mux.Vars(r)
 		name := vars["name"]
 
@@ -247,12 +232,8 @@ func handleCompare(db database.Database) func(w http.ResponseWriter, r *http.Req
 }
 
 // create handler for /items/{item}/score endpoint
-func handleGlobalScore(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+func handleGlobalScore(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
 		vars := mux.Vars(r)
 		itemName := vars["item"]
 
@@ -260,8 +241,7 @@ func handleGlobalScore(db database.Database) func(w http.ResponseWriter, r *http
 		if r.Method == "GET" {
 			globalScore, err := db.GlobalScores.GetGlobalScore(itemName)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 			bytes, err := json.Marshal(globalScore)
@@ -280,12 +260,8 @@ func handleGlobalScore(db database.Database) func(w http.ResponseWriter, r *http
 }
 
 // create handler for /users/{name}/score/{item} endpoint
-func handleUserScore(db database.Database) func(w http.ResponseWriter, r *http.Request) {
+func handleUserScore(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
 		vars := mux.Vars(r)
 		name := vars["name"]
 		itemName := vars["item"]
@@ -313,7 +289,7 @@ func handleUserScore(db database.Database) func(w http.ResponseWriter, r *http.R
 	}
 }
 
-func CreateRouter() (*mux.Router, error) {
+func CreateRouter() (http.Handler, error) {
 	r := mux.NewRouter()
 	client, err := database.GetClient("us-east-1")
 	if err != nil {
@@ -335,5 +311,7 @@ func CreateRouter() (*mux.Router, error) {
 	r.HandleFunc("/items/{item}/score", handleGlobalScore(db)).Methods("GET")
 	r.HandleFunc("/users/{name}/score/{item}", handleUserScore(db)).Methods("GET")
 
-	return r, nil
+	handler := cors.Default().Handler(r)
+
+	return handler, nil
 }

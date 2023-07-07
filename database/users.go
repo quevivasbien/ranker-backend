@@ -14,7 +14,8 @@ type UserTable Table
 // a user who can vote on items
 // TODO: add fields for credentials
 type User struct {
-	Name string `json:"name"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
 }
 
 func CreateUserTable(client *dynamodb.Client) (UserTable, error) {
@@ -44,7 +45,8 @@ func CreateUserTable(client *dynamodb.Client) (UserTable, error) {
 func (t UserTable) PutUser(user User) error {
 	input := &dynamodb.PutItemInput{
 		Item: map[string]types.AttributeValue{
-			"Name": &types.AttributeValueMemberS{Value: user.Name},
+			"Name":     &types.AttributeValueMemberS{Value: user.Name},
+			"Password": &types.AttributeValueMemberS{Value: user.Password},
 		},
 		TableName: aws.String(t.Name),
 	}
@@ -67,7 +69,8 @@ func (t UserTable) GetUser(name string) (User, error) {
 		return User{}, fmt.Errorf("No user found with name %s", name)
 	}
 	return User{
-		Name: output.Item["Name"].(*types.AttributeValueMemberS).Value,
+		Name:     output.Item["Name"].(*types.AttributeValueMemberS).Value,
+		Password: output.Item["Password"].(*types.AttributeValueMemberS).Value,
 	}, nil
 }
 
@@ -93,7 +96,8 @@ func (t UserTable) AllUsers() ([]User, error) {
 	users := []User{}
 	for _, item := range output.Items {
 		users = append(users, User{
-			Name: item["Name"].(*types.AttributeValueMemberS).Value,
+			Name:     item["Name"].(*types.AttributeValueMemberS).Value,
+			Password: item["Password"].(*types.AttributeValueMemberS).Value,
 		})
 	}
 	return users, nil

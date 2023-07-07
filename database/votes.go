@@ -14,10 +14,10 @@ type UserScoreTable Table
 
 // a vote on an item
 type UserScore struct {
-	ItemName string `json:"item_name"`
-	UserName string `json:"user_name"`
+	ItemName string `json:"itemName"`
+	UserName string `json:"userName"`
 	Rating   int    `json:"rating"`
-	NumVotes int    `json:"num_votes"`
+	NumVotes int    `json:"numVotes"`
 }
 
 func CreateUserScoreTable(client *dynamodb.Client) (UserScoreTable, error) {
@@ -149,9 +149,9 @@ func (t UserScoreTable) GetUserScores(userName string) ([]UserScore, error) {
 type GlobalScoreTable Table
 
 type GlobalScore struct {
-	ItemName string `json:"item_name"`
+	ItemName string `json:"itemName"`
 	Rating   int    `json:"rating"`
-	NumVotes int    `json:"num_votes"`
+	NumVotes int    `json:"numVotes"`
 }
 
 func CreateGlobalScoreTable(client *dynamodb.Client) (GlobalScoreTable, error) {
