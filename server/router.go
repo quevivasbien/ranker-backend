@@ -14,6 +14,8 @@ import (
 func setHTTPError(w http.ResponseWriter, err error) {
 	if _, ok := err.(database.NotFoundError); ok {
 		w.WriteHeader(http.StatusNotFound)
+	} else if _, ok := err.(PasswordMismatchError); ok {
+		w.WriteHeader(http.StatusUnauthorized)
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -57,8 +59,6 @@ func handleItems(db database.Database) http.HandlerFunc {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -94,8 +94,6 @@ func handleItem(db database.Database) http.HandlerFunc {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -137,8 +135,6 @@ func handleUsers(db database.Database) http.HandlerFunc {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -174,8 +170,6 @@ func handleUser(db database.Database) http.HandlerFunc {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -226,8 +220,6 @@ func handleCompare(db database.Database) http.HandlerFunc {
 			}
 			return
 		}
-
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -254,8 +246,6 @@ func handleGlobalScore(db database.Database) http.HandlerFunc {
 			w.Write(bytes)
 			return
 		}
-
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -284,9 +274,41 @@ func handleUserScore(db database.Database) http.HandlerFunc {
 			w.Write(bytes)
 			return
 		}
-
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+type loginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// create handler for /login endpoint
+func handleLogin(db database.Database) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			var request loginRequest
+			err := json.NewDecoder(r.Body).Decode(&request)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			token, err := Login(db, request.Username, request.Password)
+			if err != nil {
+				setHTTPError(w, err)
+				return
+			}
+			bytes, err := json.Marshal(token)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(bytes)
+		}
+	}
+
 }
 
 func CreateRouter() (http.Handler, error) {
@@ -310,6 +332,8 @@ func CreateRouter() (http.Handler, error) {
 
 	r.HandleFunc("/items/{item}/score", handleGlobalScore(db)).Methods("GET")
 	r.HandleFunc("/users/{name}/score/{item}", handleUserScore(db)).Methods("GET")
+
+	r.HandleFunc("/login", handleLogin(db)).Methods("POST")
 
 	handler := cors.Default().Handler(r)
 
