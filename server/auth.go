@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"os"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,10 +14,22 @@ func (e PasswordMismatchError) Error() string {
 	return "incorrect password"
 }
 
+type TokenMissingError struct{}
+
+func (e TokenMissingError) Error() string {
+	return "missing token for authorization"
+}
+
+type InsufficientPermissionsError struct{}
+
+func (e InsufficientPermissionsError) Error() string {
+	return "insufficient permissions"
+}
+
 func GetToken(user database.User) (string, error) {
 	secret := os.Getenv("RANKER_JWT_SECRET")
 	claims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user,
+		"sub": user.Name,
 	})
 	return claims.SignedString([]byte(secret))
 }
@@ -43,4 +56,23 @@ func Login(db database.Database, username string, password string) (string, erro
 		return "", PasswordMismatchError{}
 	}
 	return GetToken(user)
+}
+
+func VerifyUser(r *http.Request) (string, error) {
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		return "", TokenMissingError{}
+	}
+	return CheckToken(token)
+}
+
+func VerifyAdmin(r *http.Request) (string, error) {
+	user, err := VerifyUser(r)
+	if err != nil {
+		return "", err
+	}
+	if user != "admin" {
+		return "", InsufficientPermissionsError{}
+	}
+	return user, nil
 }

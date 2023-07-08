@@ -16,6 +16,10 @@ func setHTTPError(w http.ResponseWriter, err error) {
 		w.WriteHeader(http.StatusNotFound)
 	} else if _, ok := err.(PasswordMismatchError); ok {
 		w.WriteHeader(http.StatusUnauthorized)
+	} else if _, ok := err.(TokenMissingError); ok {
+		w.WriteHeader(http.StatusUnauthorized)
+	} else if _, ok := err.(InsufficientPermissionsError); ok {
+		w.WriteHeader(http.StatusForbidden)
 	} else {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -42,8 +46,15 @@ func handleItems(db database.Database) http.HandlerFunc {
 
 		// create a new item
 		if r.Method == "POST" {
+			// require jwt token
+			_, err := VerifyUser(r)
+			if err != nil {
+				setHTTPError(w, err)
+				return
+			}
+
 			var item database.Item
-			err := json.NewDecoder(r.Body).Decode(&item)
+			err = json.NewDecoder(r.Body).Decode(&item)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write([]byte(err.Error()))
@@ -85,7 +96,14 @@ func handleItem(db database.Database) http.HandlerFunc {
 
 		// delete an item
 		if r.Method == "DELETE" {
-			err := db.Items.DeleteItem(name)
+			// require jwt token and admin status
+			_, err := VerifyAdmin(r)
+			if err != nil {
+				setHTTPError(w, err)
+				return
+			}
+
+			err = db.Items.DeleteItem(name)
 			if err != nil {
 				setHTTPError(w, err)
 				return
@@ -103,6 +121,14 @@ func handleUsers(db database.Database) http.HandlerFunc {
 
 		// get list of all users
 		if r.Method == "GET" {
+
+			// require jwt token and admin status
+			_, err := VerifyAdmin(r)
+			if err != nil {
+				setHTTPError(w, err)
+				return
+			}
+
 			users, err := db.Users.AllUsers()
 			if err != nil {
 				setHTTPError(w, err)
@@ -144,6 +170,17 @@ func handleUser(db database.Database) http.HandlerFunc {
 		vars := mux.Vars(r)
 		name := vars["name"]
 
+		// require jwt token and admin status or matching username
+		username, err := VerifyUser(r)
+		if err != nil {
+			setHTTPError(w, err)
+			return
+		}
+		if username != name && username != "admin" {
+			setHTTPError(w, InsufficientPermissionsError{})
+			return
+		}
+
 		// get a single user
 		if r.Method == "GET" {
 			user, err := db.Users.GetUser(name)
@@ -161,7 +198,7 @@ func handleUser(db database.Database) http.HandlerFunc {
 
 		// delete a user
 		if r.Method == "DELETE" {
-			err := db.Users.DeleteUser(name)
+			err = db.Users.DeleteUser(name)
 			if err != nil {
 				setHTTPError(w, err)
 				return
@@ -179,15 +216,20 @@ type comparisonResponse struct {
 	Winner string `json:"winner"`
 }
 
-// create handler for /users/{name}/compare endpoint
+// create handler for /compare endpoint
 func handleCompare(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		name := vars["name"]
+
+		// require jwt token
+		username, err := VerifyUser(r)
+		if err != nil {
+			setHTTPError(w, err)
+			return
+		}
 
 		// get items for comparison
 		if r.Method == "GET" {
-			item1, item2, err := GetItemsForComparison(db, name)
+			item1, item2, err := GetItemsForComparison(db, username)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
@@ -213,7 +255,7 @@ func handleCompare(db database.Database) http.HandlerFunc {
 				w.Write([]byte(err.Error()))
 				return
 			}
-			err = ProcessUserChoice(db, name, response.Item1, response.Item2, response.Winner)
+			err = ProcessUserChoice(db, username, response.Item1, response.Item2, response.Winner)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
@@ -223,7 +265,7 @@ func handleCompare(db database.Database) http.HandlerFunc {
 	}
 }
 
-// create handler for /items/{item}/score endpoint
+// create handler for /scores/{item} endpoint
 func handleGlobalScore(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -249,12 +291,23 @@ func handleGlobalScore(db database.Database) http.HandlerFunc {
 	}
 }
 
-// create handler for /users/{name}/score/{item} endpoint
+// create handler for /scores/{item}/{user} endpoint
 func handleUserScore(db database.Database) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
-		name := vars["name"]
 		itemName := vars["item"]
+		name := vars["user"]
+
+		// require jwt token and admin status or matching username
+		username, err := VerifyUser(r)
+		if err != nil {
+			setHTTPError(w, err)
+			return
+		}
+		if username != name && username != "admin" {
+			setHTTPError(w, InsufficientPermissionsError{})
+			return
+		}
 
 		// get the score for a single item
 		if r.Method == "GET" {
@@ -328,14 +381,20 @@ func CreateRouter() (http.Handler, error) {
 	r.HandleFunc("/users", handleUsers(db)).Methods("GET", "POST")
 	r.HandleFunc("/users/{name}", handleUser(db)).Methods("GET", "DELETE")
 
-	r.HandleFunc("/users/{name}/compare", handleCompare(db)).Methods("GET", "POST")
+	r.HandleFunc("/compare", handleCompare(db)).Methods("GET", "POST")
 
-	r.HandleFunc("/items/{item}/score", handleGlobalScore(db)).Methods("GET")
-	r.HandleFunc("/users/{name}/score/{item}", handleUserScore(db)).Methods("GET")
+	r.HandleFunc("/scores/{item}", handleGlobalScore(db)).Methods("GET")
+	r.HandleFunc("/scores/{item}/{user}", handleUserScore(db)).Methods("GET")
 
 	r.HandleFunc("/login", handleLogin(db)).Methods("POST")
 
-	handler := cors.Default().Handler(r)
+	handler := cors.New(
+		cors.Options{
+			AllowedOrigins:   []string{"*"},
+			AllowCredentials: true,
+			AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		},
+	).Handler(r)
 
 	return handler, nil
 }
