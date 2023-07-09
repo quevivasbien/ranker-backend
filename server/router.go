@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -12,17 +13,20 @@ import (
 
 // send the right HTTP status code for an error
 func setHTTPError(w http.ResponseWriter, err error) {
+	var statusCode int
 	if _, ok := err.(database.NotFoundError); ok {
-		w.WriteHeader(http.StatusNotFound)
+		statusCode = http.StatusNotFound
 	} else if _, ok := err.(PasswordMismatchError); ok {
-		w.WriteHeader(http.StatusUnauthorized)
+		statusCode = http.StatusUnauthorized
 	} else if _, ok := err.(TokenMissingError); ok {
-		w.WriteHeader(http.StatusUnauthorized)
+		statusCode = http.StatusUnauthorized
 	} else if _, ok := err.(InsufficientPermissionsError); ok {
-		w.WriteHeader(http.StatusForbidden)
+		statusCode = http.StatusForbidden
 	} else {
-		w.WriteHeader(http.StatusInternalServerError)
+		statusCode = http.StatusInternalServerError
 	}
+	log.Printf("Error: %s; wrote status code %d", err.Error(), statusCode)
+	w.WriteHeader(statusCode)
 	w.Write([]byte(err.Error()))
 }
 
@@ -231,6 +235,7 @@ func handleCompare(db database.Database) http.HandlerFunc {
 		if r.Method == "GET" {
 			item1, item2, err := GetItemsForComparison(db, username)
 			if err != nil {
+				log.Println(err)
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
 				return
@@ -313,14 +318,12 @@ func handleUserScore(db database.Database) http.HandlerFunc {
 		if r.Method == "GET" {
 			userScore, err := db.UserScores.GetUserScore(itemName, name)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 			bytes, err := json.Marshal(userScore)
 			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(err.Error()))
+				setHTTPError(w, err)
 				return
 			}
 			w.WriteHeader(http.StatusOK)
